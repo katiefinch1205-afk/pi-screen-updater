@@ -9,6 +9,7 @@ KIOSK_URL="http://10.10.2.194:3001/"
 AUTOSTART_DIR="$HOME/.config/labwc"
 AUTOSTART_FILE="$AUTOSTART_DIR/autostart"
 INFO_SCRIPT="$HOME/.local/bin/pi-screen-desktop-info.sh"
+WATCHDOG_SCRIPT="$HOME/.local/bin/pi-screen-kiosk-watchdog.sh"
 START_MARKER="# >>> pi-screen-updater managed block >>>"
 END_MARKER="# <<< pi-screen-updater managed block <<<"
 
@@ -52,22 +53,62 @@ pcmanfm --set-wallpaper="$OUT_IMG" --wallpaper-mode=stretch
 INFO_EOF
 chmod +x "$INFO_SCRIPT"
 
+cat > "$WATCHDOG_SCRIPT" <<'WATCHDOG_EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Launches chromium in kiosk mode and keeps it pointed at a working page.
+# If the target URL stops responding, kills chromium, waits, and relaunches.
+
+KIOSK_URL="__KIOSK_URL__"
+CHECK_INTERVAL=10   # seconds between page checks while chromium is running
+RETRY_DELAY=20      # seconds to wait after a failed page before relaunching
+
+CHROME_ARGS=(
+  --kiosk
+  --noerrdialogs
+  --disable-infobars
+  --incognito
+  --disable-session-crashed-bubble
+  --disable-restore-session-state
+  --overscroll-history-navigation=0
+  --check-for-update-interval=31536000
+  --password-store=basic
+  --ozone-platform=wayland
+)
+
+is_page_up() {
+  curl -fsS -o /dev/null --max-time 5 "$KIOSK_URL"
+}
+
+while true; do
+  chromium "${CHROME_ARGS[@]}" "$KIOSK_URL" &
+  CHROME_PID=$!
+
+  # Give the page a few seconds to attempt loading before the first check.
+  sleep 5
+
+  while kill -0 "$CHROME_PID" 2>/dev/null; do
+    if ! is_page_up; then
+      echo "$(date): page unreachable, restarting chromium"
+      kill "$CHROME_PID" 2>/dev/null || true
+      wait "$CHROME_PID" 2>/dev/null || true
+      break
+    fi
+    sleep "$CHECK_INTERVAL"
+  done
+
+  sleep "$RETRY_DELAY"
+done
+WATCHDOG_EOF
+sed -i "s|__KIOSK_URL__|$KIOSK_URL|" "$WATCHDOG_SCRIPT"
+chmod +x "$WATCHDOG_SCRIPT"
+
 cat >> "$AUTOSTART_FILE" <<EOF
 
 $START_MARKER
 $INFO_SCRIPT &
-chromium \\
-  --kiosk \\
-  --noerrdialogs \\
-  --disable-infobars \\
-  --incognito \\
-  --disable-session-crashed-bubble \\
-  --disable-restore-session-state \\
-  --overscroll-history-navigation=0 \\
-  --check-for-update-interval=31536000 \\
-  --password-store=basic \\
-  --ozone-platform=wayland \\
-  $KIOSK_URL &
+$WATCHDOG_SCRIPT &
 $END_MARKER
 EOF
 
@@ -75,4 +116,5 @@ chmod +x "$AUTOSTART_FILE"
 
 echo "Kiosk config applied to $AUTOSTART_FILE"
 echo "Desktop info script installed at $INFO_SCRIPT (runs on every login, sets wallpaper to hostname + IP)"
+echo "Watchdog installed at $WATCHDOG_SCRIPT (restarts chromium if the page becomes unreachable)"
 echo "Reboot the Pi to apply: sudo reboot"
