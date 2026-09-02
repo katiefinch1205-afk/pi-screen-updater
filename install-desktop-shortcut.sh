@@ -13,12 +13,23 @@ mkdir -p "$DESKTOP_DIR"
 
 cat > "$WRAPPER_SCRIPT" <<EOF
 #!/usr/bin/env bash
-set -e
-curl -fsSL -o "\$HOME/update.sh" "$REPO_RAW/update.sh"
+if ! curl -fsSL -o "\$HOME/update.sh" "$REPO_RAW/update.sh"; then
+  echo "Failed to download update.sh"
+  read -p "Press Enter to close..."
+  exit 1
+fi
 chmod +x "\$HOME/update.sh"
-"\$HOME/update.sh"
-echo
-read -p "Press Enter to close..."
+
+if "\$HOME/update.sh"; then
+  echo
+  echo "Update applied. Rebooting in 5 seconds..."
+  sleep 5
+  sudo reboot
+else
+  echo
+  echo "Update failed, see the errors above."
+  read -p "Press Enter to close..."
+fi
 EOF
 chmod +x "$WRAPPER_SCRIPT"
 
