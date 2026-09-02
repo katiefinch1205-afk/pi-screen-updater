@@ -24,6 +24,7 @@ chromium \\
   --disable-restore-session-state \\
   --overscroll-history-navigation=0 \\
   --check-for-update-interval=31536000 \\
+  --password-store=basic \\
   --ozone-platform=wayland \\
   $KIOSK_URL &
 EOF
