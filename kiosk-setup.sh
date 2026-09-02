@@ -4,6 +4,7 @@ set -euo pipefail
 # Run this on the Raspberry Pi itself (Debian trixie, labwc/wlroots desktop,
 # already set to auto-login). It configures the desktop session to launch
 # Chromium full-screen against the warehouse display on every boot.
+# Safe to re-run: replaces any previous kiosk block instead of duplicating it.
 
 KIOSK_URL="http://10.10.2.194:3001/"
 AUTOSTART_DIR="$HOME/.config/labwc"
@@ -12,8 +13,10 @@ AUTOSTART_FILE="$AUTOSTART_DIR/autostart"
 mkdir -p "$AUTOSTART_DIR"
 touch "$AUTOSTART_FILE"
 
-if ! grep -q "$KIOSK_URL" "$AUTOSTART_FILE" 2>/dev/null; then
-  cat >> "$AUTOSTART_FILE" <<EOF
+# Remove any existing chromium kiosk block before adding the current one.
+sed -i '/^chromium \\/,/&$/d' "$AUTOSTART_FILE"
+
+cat >> "$AUTOSTART_FILE" <<EOF
 
 chromium \\
   --kiosk \\
@@ -28,11 +31,8 @@ chromium \\
   --ozone-platform=wayland \\
   $KIOSK_URL &
 EOF
-  echo "Added kiosk launch to $AUTOSTART_FILE"
-else
-  echo "Kiosk launch already present in $AUTOSTART_FILE, skipping"
-fi
 
 chmod +x "$AUTOSTART_FILE"
 
-echo "Done. Reboot the Pi to test: sudo reboot"
+echo "Kiosk config applied to $AUTOSTART_FILE"
+echo "Reboot the Pi to apply: sudo reboot"
