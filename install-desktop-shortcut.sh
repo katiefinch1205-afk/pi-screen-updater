@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run this on the Raspberry Pi to add a double-clickable "Update Kiosk" icon
-# to the desktop, so pulling the latest config doesn't need a pasted command.
+# Run this on the Raspberry Pi to add double-clickable "Update Kiosk" and
+# "Exit Kiosk" icons to the desktop, so neither needs a pasted command.
 
 REPO_RAW="https://raw.githubusercontent.com/katiefinch1205-afk/pi-screen-updater/main"
 WRAPPER_SCRIPT="$HOME/update-kiosk.sh"
+EXIT_SCRIPT="$HOME/exit-kiosk.sh"
 DESKTOP_DIR="$HOME/Desktop"
 DESKTOP_FILE="$DESKTOP_DIR/update-kiosk.desktop"
+EXIT_DESKTOP_FILE="$DESKTOP_DIR/exit-kiosk.desktop"
 
 mkdir -p "$DESKTOP_DIR"
 
@@ -44,6 +46,26 @@ Terminal=false
 EOF
 chmod +x "$DESKTOP_FILE"
 
-echo "Desktop shortcut installed at $DESKTOP_FILE"
-echo "Double-click it to pull and apply the latest kiosk config."
+cat > "$EXIT_SCRIPT" <<'EOF'
+#!/usr/bin/env bash
+# Kill the watchdog first, otherwise it just relaunches chromium.
+pkill -f pi-screen-kiosk-watchdog.sh
+pkill chromium
+EOF
+chmod +x "$EXIT_SCRIPT"
+
+cat > "$EXIT_DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Exit Kiosk
+Comment=Stop chromium and the watchdog so the desktop stays free for maintenance
+Exec=$EXIT_SCRIPT
+Icon=application-exit
+Terminal=false
+EOF
+chmod +x "$EXIT_DESKTOP_FILE"
+
+echo "Desktop shortcuts installed:"
+echo "  $DESKTOP_FILE (pulls and applies the latest kiosk config, then reboots)"
+echo "  $EXIT_DESKTOP_FILE (stops chromium and the watchdog for maintenance)"
 echo "If pcmanfm shows an 'untrusted launcher' prompt the first time, choose Trust/Execute."
